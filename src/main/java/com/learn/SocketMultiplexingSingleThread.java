@@ -2,7 +2,6 @@ package com.learn;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -11,7 +10,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Iterator;
 import java.util.Set;
 
-public class SocketMultiplexingSingleThreadV1 {
+public class SocketMultiplexingSingleThread {
 
     // NIO nonblocking socket网络，内核机制
     // NIO new io jdk（channel, bytebuffer, selector多路复用器）
@@ -101,7 +100,7 @@ public class SocketMultiplexingSingleThreadV1 {
     }
 
     public static void main(String[] args) {
-        SocketMultiplexingSingleThreadV1 service = new SocketMultiplexingSingleThreadV1();
+        SocketMultiplexingSingleThread service = new SocketMultiplexingSingleThread();
         service.start();
     }
 }
