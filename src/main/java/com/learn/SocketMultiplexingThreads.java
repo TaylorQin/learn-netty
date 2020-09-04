@@ -55,104 +55,105 @@ public class SocketMultiplexingThreads {
         }
     }
 
-    private static class NioThread extends Thread {
-        Selector selector = null;
-        static int selectors = 0;
-        boolean boss = false;
+}
 
-        int id = 0;
+class NioThread extends Thread {
+    Selector selector = null;
+    static int selectors = 0;
+    boolean boss = false;
 
-        static BlockingQueue<SocketChannel>[] queue;
-        static AtomicInteger idx =  new AtomicInteger();
+    int id = 0;
 
-        public NioThread(Selector selector, int threadNumber) {
-            this.selector = selector;
-            this.selectors = threadNumber;
-            boss = true;
-            queue = new LinkedBlockingDeque[selectors];
-            for (int i = 0; i < threadNumber; i++) {
-                queue[i] = new LinkedBlockingDeque<>();
-            }
-            System.out.println("Boss 启动");
+    static BlockingQueue<SocketChannel>[] queue;
+    static AtomicInteger idx =  new AtomicInteger();
+
+    public NioThread(Selector selector, int threadNumber) {
+        this.selector = selector;
+        this.selectors = threadNumber;
+        boss = true;
+        queue = new LinkedBlockingDeque[selectors];
+        for (int i = 0; i < threadNumber; i++) {
+            queue[i] = new LinkedBlockingDeque<>();
         }
+        System.out.println("Boss 启动");
+    }
 
-        public NioThread(Selector selector) {
-            this.selector = selector;
-            id = idx.getAndIncrement() % selectors;
-            System.out.println("Worker: "+id+" 启动");
-        }
+    public NioThread(Selector selector) {
+        this.selector = selector;
+        id = idx.getAndIncrement() % selectors;
+        System.out.println("Worker: "+id+" 启动");
+    }
 
-        @Override
-        public void run() {
-            try {
-                while (true) {
-                    while (selector.select(10) > 0) {
-                        Set<SelectionKey> selectionKeys = selector.selectedKeys();
-                        Iterator<SelectionKey> iterator = selectionKeys.iterator();
-                        while (iterator.hasNext()) {
-                            SelectionKey key = iterator.next();
-                            iterator.remove();
-                            if (key.isAcceptable()) {
-                                acceptHandler(key);
-                            } else if (key.isReadable()) {
-                                readHandler(key);
-                            }
+    @Override
+    public void run() {
+        try {
+            while (true) {
+                while (selector.select(10) > 0) {
+                    Set<SelectionKey> selectionKeys = selector.selectedKeys();
+                    Iterator<SelectionKey> iterator = selectionKeys.iterator();
+                    while (iterator.hasNext()) {
+                        SelectionKey key = iterator.next();
+                        iterator.remove();
+                        if (key.isAcceptable()) {
+                            acceptHandler(key);
+                        } else if (key.isReadable()) {
+                            readHandler(key);
                         }
                     }
-
-                    if (!boss && !queue[id].isEmpty()) {
-                        ByteBuffer buffer = ByteBuffer.allocate(4096);
-                        SocketChannel client = queue[id].take();
-                        client.register(selector, SelectionKey.OP_READ, buffer);
-                        System.out.println("-----------------------------------------");
-                        System.out.println("新客户端： "+client.socket().getPort()+"分配到Worker:"+id);
-                        System.out.println("-----------------------------------------");
-                    }
                 }
-            } catch (IOException | InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
 
-        private void acceptHandler(SelectionKey key) {
-            try {
-                ServerSocketChannel ssc = (ServerSocketChannel) key.channel();
-                SocketChannel client = ssc.accept();
-                client.configureBlocking(false);
-
-                int num = idx.getAndIncrement() % selectors;
-                queue[num].add(client);
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
-        public void readHandler(SelectionKey key) {
-            SocketChannel client = (SocketChannel) key.channel();
-            ByteBuffer buffer = (ByteBuffer) key.attachment();
-            buffer.clear();
-            int read = 0;
-            try {
-                while (true) {
-                    read = client.read(buffer);
-                    if(read > 0) {
-                        buffer.flip();
-                        while(buffer.hasRemaining()) {
-                            client.write(buffer);
-                        }
-                        buffer.clear();
-                    } else if(read == 0) {
-                        break;
-                    } else { // 如果没有这段，服务端泡在linux环境中时，当客户端暴力断开连接后，上面的 readHandler(key) 会一直被调用。
-                        client.close();
-                        break;
-                    }
+                if (!boss && !queue[id].isEmpty()) {
+                    ByteBuffer buffer = ByteBuffer.allocate(4096);
+                    SocketChannel client = queue[id].take();
+                    client.register(selector, SelectionKey.OP_READ, buffer);
+                    System.out.println("-----------------------------------------");
+                    System.out.println("新客户端： "+client.socket().getPort()+"分配到Worker:"+id);
+                    System.out.println("-----------------------------------------");
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
             }
-
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
         }
+    }
+
+    private void acceptHandler(SelectionKey key) {
+        try {
+            ServerSocketChannel ssc = (ServerSocketChannel) key.channel();
+            SocketChannel client = ssc.accept();
+            client.configureBlocking(false);
+
+            int num = idx.getAndIncrement() % selectors;
+            queue[num].add(client);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void readHandler(SelectionKey key) {
+        SocketChannel client = (SocketChannel) key.channel();
+        ByteBuffer buffer = (ByteBuffer) key.attachment();
+        buffer.clear();
+        int read = 0;
+        try {
+            while (true) {
+                read = client.read(buffer);
+                if(read > 0) {
+                    buffer.flip();
+                    while(buffer.hasRemaining()) {
+                        client.write(buffer);
+                    }
+                    buffer.clear();
+                } else if(read == 0) {
+                    break;
+                } else { // 如果没有这段，服务端泡在linux环境中时，当客户端暴力断开连接后，上面的 readHandler(key) 会一直被调用。
+                    client.close();
+                    break;
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 }
